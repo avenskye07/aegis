@@ -29,10 +29,12 @@ def _aegis_mod(name: str):
 
 
 _math = _aegis_mod("_aegis_math")
+_rep = _aegis_mod("_aegis_report")
 HOLD = _math.HOLD
 VIABLE = _math.VIABLE
 WIDEN = _math.WIDEN
 ceiling_bps_from_amm_pct = _math.ceiling_bps_from_amm_pct
+cap_quote_budget = _math.cap_quote_budget
 implied_xrpl_price = _math.implied_xrpl_price
 ladder_bps = _math.ladder_bps
 per_level_quote = _math.per_level_quote
@@ -57,6 +59,32 @@ HOUR_VOL_MULT = {
 MS_PER_HOUR = 3_600_000
 
 
+def _token_free(state, code: str) -> float:
+    rows = []
+    if isinstance(state, dict):
+        acct = state.get("master_account")
+        if isinstance(acct, dict) and isinstance(acct.get("xrpl"), list):
+            rows = acct["xrpl"]
+        elif isinstance(state.get("xrpl"), list):
+            rows = state["xrpl"]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        asset = str(row.get("token") or row.get("asset") or row.get("currency") or "")
+        if asset.upper() != code.upper():
+            continue
+        try:
+            return float(
+                row.get("available_units")
+                or row.get("units")
+                or row.get("free")
+                or 0
+            )
+        except (TypeError, ValueError):
+            return 0.0
+    return 0.0
+
+
 class Config(BaseModel):
     """Plan maker quotes for one XRPL pair against a CEX XRP-USD reference."""
 
@@ -76,6 +104,8 @@ class Config(BaseModel):
     )
     widen_distance_pct: float = Field(default=1.0)
     top_of_book_improve_pct: float = Field(default=0.01)
+    quote_free: float = Field(default=-1.0, description="Live quote units; <0 means load from portfolio")
+    base_free: float = Field(default=-1.0, description="Live base (XRP) units; <0 means load from portfolio")
 
 
 def _hour_mult_span(start_ms: int, end_ms: int) -> float:
@@ -185,6 +215,8 @@ def plan_from_inputs(
     best_ask: float | None,
     improve_pct: float,
     widen_pct: float,
+    quote_free: float | None = None,
+    base_free: float | None = None,
 ) -> str:
     mid = implied_xrpl_price(xrpl_pair, xrp_usd)
     floor = spread_floor_bps(vol_per_sec, requote_sec, adverse_k)
@@ -212,6 +244,21 @@ def plan_from_inputs(
         out.append("reason: empty book — do not quote")
         return "\n".join(out)
 
+    sized = total_amount_quote
+    if quote_free is not None and base_free is not None:
+        sized, budget_note = cap_quote_budget(
+            total_amount_quote, quote_free, base_free, mid or xrp_usd
+        )
+        out.append(budget_note)
+        out.append(f"quote_free: {quote_free:.6f}  base_free: {base_free:.6f}")
+        if sized <= 0:
+            out.append(f"verdict: {HOLD}")
+            out.append("reason: not enough inventory — do not open this pair")
+            return "\n".join(out)
+        out.append(f"controller_total_amount_quote: {sized:.2f}")
+        if sized + 1e-9 < total_amount_quote:
+            out.append("note: never deploy a pmm_simple total above this cap")
+
     if mode == VIABLE:
         ladder = ladder_bps(floor, ceiling, levels)
         fracs = spreads_as_fractions(ladder)
@@ -226,15 +273,32 @@ def plan_from_inputs(
         out.append(f"widen_spread_fraction: {widen_pct / 100:.6f}")
         out.append("levels_per_side: 1  (widen — keep quoting)")
 
-    out.append(f"per_level_quote: {per_level_quote(total_amount_quote, levels):.2f}")
+    out.append(f"per_level_quote: {per_level_quote(sized, levels):.2f}")
     out.append(f"reserve_xrp_this_pair: {reserve_xrp(levels if mode == VIABLE else 1, 1):.2f}")
     return "\n".join(out)
+
+
+async def _out(text: str, pair: str = "") -> str:
+    rows = _rep.parse_kv_lines(text)
+    await _rep.save_clerk_report(
+        title=f"AEGIS — Quote {pair or _rep.pick(rows, 'xrpl_pair')}",
+        source="aegis_quote_planner",
+        text=text,
+        kpis=[
+            ("Pair", pair or _rep.pick(rows, "xrpl_pair")),
+            ("Verdict", _rep.pick(rows, "verdict")),
+            ("L1 bid", _rep.pick(rows, "tob_bid", "widen_bid")),
+        ],
+        section="03 / BOOK PLAN",
+        description="VIABLE = 3+3. WIDEN = 1+1. HOLD = skip this pair.",
+    )
+    return text
 
 
 async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     client = await get_client(context._chat_id, context=context)
     if not client:
-        return "verdict: HOLD\nreason: no hummingbot server"
+        return await _out("verdict: HOLD\nreason: no hummingbot server", config.xrpl_pair)
 
     try:
         candles_raw, ref_prices = await asyncio.gather(
@@ -249,12 +313,17 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
             ),
         )
     except Exception as exc:
-        return f"verdict: HOLD\nreason: CEX reference ERROR — {exc}"
+        return await _out(
+            f"verdict: HOLD\nreason: CEX reference ERROR — {exc}", config.xrpl_pair
+        )
 
     candles = _norm_candles(candles_raw)
     closes = [float(c.get("close", 0)) for c in candles if float(c.get("close", 0)) > 0]
     if not closes:
-        return f"verdict: HOLD\nreason: no candle data for {config.reference_pair}"
+        return await _out(
+            f"verdict: HOLD\nreason: no candle data for {config.reference_pair}",
+            config.xrpl_pair,
+        )
     xrp_usd = _extract_ref_price(ref_prices, config.reference_pair, closes[-1])
 
     requote = max(config.requote_interval_sec or config.tick_interval_sec, 1)
@@ -280,8 +349,13 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     except Exception as exc:
         err = str(exc).lower()
         if "notsynced" in err:
-            return f"verdict: HOLD\nreason: XRPL notSynced on {config.xrpl_pair}"
-        return f"verdict: HOLD\nreason: book ERROR — {exc}"
+            return await _out(
+                f"verdict: HOLD\nreason: XRPL notSynced on {config.xrpl_pair}",
+                config.xrpl_pair,
+            )
+        return await _out(
+            f"verdict: HOLD\nreason: book ERROR — {exc}", config.xrpl_pair
+        )
     if isinstance(book, dict):
         bids = book.get("bids") or book.get("buy") or []
         asks = book.get("asks") or book.get("sell") or []
@@ -291,6 +365,22 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
                 best_ask = float(asks[0][0] if isinstance(asks[0], (list, tuple)) else asks[0].get("price"))
             except (TypeError, ValueError, IndexError, KeyError):
                 best_bid = best_ask = None
+
+    quote_free = config.quote_free
+    base_free = config.base_free
+    if quote_free < 0 or base_free < 0:
+        try:
+            port = await client.portfolio.get_state()
+            if quote_free < 0:
+                quote_free = _token_free(port, quote)
+            if base_free < 0:
+                base_free = _token_free(port, base)
+        except Exception as exc:
+            logger.warning("portfolio for budget cap: %s", exc)
+            if quote_free < 0:
+                quote_free = 0.0
+            if base_free < 0:
+                base_free = 0.0
 
     text = plan_from_inputs(
         xrpl_pair=config.xrpl_pair,
@@ -305,5 +395,7 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
         best_ask=best_ask,
         improve_pct=config.top_of_book_improve_pct,
         widen_pct=config.widen_distance_pct,
+        quote_free=quote_free,
+        base_free=base_free,
     )
-    return text + f"\namm_note: {amm_note}"
+    return await _out(text + f"\namm_note: {amm_note}", config.xrpl_pair)

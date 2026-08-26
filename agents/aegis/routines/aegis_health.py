@@ -24,6 +24,7 @@ def _aegis_mod(name: str):
 
 
 _math = _aegis_mod("_aegis_math")
+_rep = _aegis_mod("_aegis_report")
 GO = _math.GO
 STOP = _math.STOP
 issuer_ok = _math.issuer_ok
@@ -55,14 +56,31 @@ def _book_ok(raw) -> bool:
     return bool(bids) and bool(asks)
 
 
+async def _out(text: str) -> str:
+    rows = _rep.parse_kv_lines(text)
+    await _rep.save_clerk_report(
+        title="AEGIS — Venue Health",
+        source="aegis_health",
+        text=text,
+        kpis=[
+            ("Verdict", _rep.pick(rows, "verdict")),
+            ("XRPL", "GO" if "BOOK_OK" in text and "verdict: GO" in text else "HOLD"),
+            ("Gate", "OK" if "gate" in text and "BOOK_OK" in text else "DOWN"),
+        ],
+        section="01 / VENUE TRUTH",
+        description="XRPL books + Gate shield must be live before any quote.",
+    )
+    return text
+
+
 async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     client = await get_client(context._chat_id, context=context)
     if not client:
-        return f"verdict: {STOP}\nreason: no hummingbot server"
+        return await _out(f"verdict: {STOP}\nreason: no hummingbot server")
 
     lines = ["=== AEGIS HEALTH ==="]
     if not issuer_ok("RLUSD", config.rlusd_issuer) or not issuer_ok("USDC", config.usdc_issuer):
-        return f"verdict: {STOP}\nreason: issuer whitelist failed"
+        return await _out(f"verdict: {STOP}\nreason: issuer whitelist failed")
 
     xrpl_ok = True
     for pair in (config.xrpl_pair_a, config.xrpl_pair_b):
@@ -72,7 +90,7 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
             logger.warning("xrpl book %s: %s", pair, exc)
             err = str(exc).lower()
             if "notsynced" in err or "500" in err:
-                return (
+                return await _out(
                     f"verdict: {STOP}\nreason: XRPL notSynced on {pair} — HOLD entire tick"
                 )
             xrpl_ok = False
@@ -96,10 +114,10 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     if not gate_ok:
         lines.append(f"verdict: {STOP}")
         lines.append("reason: Gate unreachable — do not quote (cannot shield a fill)")
-        return "\n".join(lines)
+        return await _out("\n".join(lines))
     if not xrpl_ok:
         lines.append(f"verdict: {STOP}")
         lines.append("reason: XRPL book missing — HOLD")
-        return "\n".join(lines)
+        return await _out("\n".join(lines))
     lines.append(f"verdict: {GO}")
-    return "\n".join(lines)
+    return await _out("\n".join(lines))

@@ -11,6 +11,14 @@ SHIELD_ON = "SHIELD_ON"
 RESIZE = "RESIZE"
 RELEASE = "RELEASE"
 RE_ARM = "RE_ARM"
+HEALTHY = "HEALTHY"
+REDEPLOY = "REDEPLOY"
+SET_LEVERAGE = "SET_LEVERAGE"
+SET_ONEWAY = "SET_ONEWAY"
+WARM_BOOK = "WARM_BOOK"
+CLOSE_ORPHAN = "CLOSE_ORPHAN"
+CANCEL_STALE = "CANCEL_STALE"
+FALLBACK_EXEC = "FALLBACK_EXEC"
 
 # Official issuers (whitelist). Never quote a copycat.
 RLUSD_ISSUER = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
@@ -171,6 +179,34 @@ def shield_verdict(
     return HOLD
 
 
+def heal_verdict(
+    *,
+    server_ok: bool,
+    books_ok: bool,
+    leverage_ok: bool,
+    oneway_ok: bool,
+    bot_running: bool,
+    orphan_short_usd: float,
+    stale_quote_count: int,
+) -> str:
+    """One heal action. Order is safety first, then venue, then quotes."""
+    if not server_ok:
+        return STOP
+    if float(orphan_short_usd) > 1:
+        return CLOSE_ORPHAN
+    if int(stale_quote_count) > 0:
+        return CANCEL_STALE
+    if not oneway_ok:
+        return SET_ONEWAY
+    if not leverage_ok:
+        return SET_LEVERAGE
+    if not books_ok:
+        return WARM_BOOK
+    if not bot_running:
+        return REDEPLOY
+    return HEALTHY
+
+
 def issuer_ok(code: str, issuer: str) -> bool:
     c = (code or "").upper()
     i = (issuer or "").strip()
@@ -181,3 +217,39 @@ def issuer_ok(code: str, issuer: str) -> bool:
     if c == "USDC":
         return i == USDC_ISSUER
     return False
+
+
+MIN_PAIR_QUOTE = 2.0
+BUDGET_HAIRCUT = 0.80
+
+
+def cap_quote_budget(
+    plan: float,
+    quote_free: float,
+    base_free: float,
+    px: float,
+    haircut: float = BUDGET_HAIRCUT,
+    min_quote: float = MIN_PAIR_QUOTE,
+) -> tuple[float, str]:
+    """Fit pmm_simple total_amount_quote to live inventory.
+
+    One number feeds both bids and asks. Oversizing the thin side is what
+    floods Hummingbot with INSUFFICIENT_BALANCE. Never return a budget the
+    wallet cannot open on *both* sides.
+    """
+    plan = max(float(plan or 0), 0.0)
+    px = max(float(px or 0), 0.0)
+    h = min(max(float(haircut), 0.0), 1.0)
+    buy_cap = max(float(quote_free or 0), 0.0) * h
+    sell_cap = max(float(base_free or 0), 0.0) * px * h
+    capped = min(plan, buy_cap, sell_cap)
+    if capped < min_quote:
+        return 0.0, (
+            f"HOLD budget: plan={plan:.2f} buy_cap={buy_cap:.2f} "
+            f"sell_cap={sell_cap:.2f} — do not deploy this pair"
+        )
+    note = (
+        f"budget: plan={plan:.2f} buy_cap={buy_cap:.2f} sell_cap={sell_cap:.2f} "
+        f"controller_total_amount_quote={capped:.2f}"
+    )
+    return capped, note

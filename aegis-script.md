@@ -12,19 +12,38 @@ The story lives **in this video**, not on the deck. Slide 2 is just the timeline
 
 **On screen:** the cover infographic. Point as you talk — left, center, right, then the bar at the bottom.
 
-This is **AEGIS**. Defensive market making.
+This is **AEGIS**. 
+Defensive market making.
 
-Three jobs. That’s the whole bot.
+Aegis has 3 Jobs:
 
-**One — defend in the bear.** When XRP is dumping, I want the *dollar value* of my coins to hold up. Automatic hedge.
+One — 
+defend 
+in the bear market.
 
-**Two — release in the bull.** If it actually runs, I still want the stack. Take the shield off. Let the coins grow.
+When XRP is dumping, 
+I want the dollar value of my XRP 
+to hold up by automatic hedge 
+or with short position.
 
-**Three — collect spread the whole time.** Bear or bull, I’m quoting. Bid-ask is the paycheck while I wait.
+Two — 
+release 
+in the bull market.
 
-That’s the objective on the bottom: **keep the dollar value of XRP. Grow the stack when it moons.**
+If XRP is pumping,
+I still hold XRP. 
+Short position will be closed. 
 
-How it got here is the real story.
+Three — 
+always collect spread.
+Bear or bull, 
+I’m placing orders. 
+Spread is the paycheck while I wait.
+
+These are 
+my 2 Objectives: 
+keep the dollar value of my XRP. 
+Grow my XRP stack.
 
 ---
 
@@ -33,21 +52,78 @@ How it got here is the real story.
 **On screen:** STARTED → DRAWDOWN → HEDGE → PROGRAM END → AEGIS  
 Point at each node as you talk. Don’t rush.
 
-I started market making last year because of **XRPLiquid**. That was my first real Market Making journey. XRP was about **three dollars forty**. Weekly rewards made it feel… manageable. You could almost predict a week.
+Here is my story.
 
-Then the XRP price just kept falling. Week after week, and months. Last month it was about **a dollar**. Even with the rewards, I still went negative for several times. I realized spreads don’t save me if the XRP itself is decreasing in value.
+I started market making 
+last year because of XRPLiquid. 
+That was my first 
+real Market Making journey. 
 
-I kept hearing about **hedging** — Discord, YouTube, old Hummingbot threads. So I tried. The old Hummingbot hedge setups did **not** work for me. I couldn’t get it to work.
+XRP was about three dollars forty. 
 
-This year I tried again with **Condor**. I just… told it to hedge. It still took a few iterations. But it actually held. That’s when AEGIS was born. The XRPLiquid rewards became a **bonus** on top — not the whole strategy.
+Weekly rewards was great 
+and profitable.
 
-Then XRPLiquid ended. Suddenly. I was sad. A lot of us were. The bonus was gone.
+But then the XRP price 
+just kept falling.  
 
-So AEGIS had to grow up. No more weekly paycheck for sitting on the book. Now it has to defend the dollar value of my XRP, keep the stack if it moons, and earn spread the hard way.
+Even with the rewards, 
+I still went negative for several times. 
 
-It’s not easy money. I’m not going to pretend it is. But it feels promising. And with Condor, I actually believe there’s a better way than what I was doing last year.
+I realized spreads and rewards 
+don’t save me 
+if the XRP itself 
+is decreasing in value.
 
-If you’ve ever Market Make through a dump and thought “the rewards are the only thing keeping me alive” — that’s where I was. This is me trying to live without them. I still do pray that XRPLiquid will come back soon. Either way, Aegis and Condor will help me grow my XRP stack.
+I kept seeing about
+**hedging** 
+in Discord 
+and YouTube. 
+
+So I tried hedging. 
+
+But the old Hummingbot hedge 
+did **not** work for me. 
+
+This year I tried again 
+with **Condor**. 
+
+I told Condor to hedge. 
+
+It eventually worked after few weeks. 
+So that’s when 
+AEGIS 
+was born. 
+
+Unfortunately, 
+after a month or 2, 
+XRPLiquid 
+suddenly ended. 
+
+I was really sad that time. 
+The bonus was gone.
+
+So AEGIS had to grow up. 
+
+No more weekly paycheck. 
+
+Now it has to defend 
+the dollar value of my XRP, 
+
+keep the stack if it moons, 
+and earn spread the hard way.
+
+It’s not easy money. 
+I’m not going to pretend it is. 
+But it feels promising. 
+
+I still do pray 
+that XRPLiquid 
+will come back soon. 
+
+Either way, 
+Aegis and Condor 
+will help me grow my XRP stack.
 
 ---
 
@@ -55,13 +131,28 @@ If you’ve ever Market Make through a dump and thought “the rewards are the o
 
 **On screen:** two books → one pile → Gate short
 
-Today it looks like this.
+Today, 
+Aegis works like this.
 
-I quote both pairs. Fills go into **one XRP pile**.
+I quote both 
+at XRP-RLUSD and 
+XRP-USDC pairs. 
 
-If that pile is heavy, Gate opens a matching short. Same size, one times. That’s the shield.
+Fills go into **XRP reserve**.
 
-The short is not me betting XRP goes down. It’s so a crash doesn’t hollow out the dollars while I’m still holding the coins.
+If that reserve becomes heavy, 
+or XRP price is dumping, 
+at Gate exchange, 
+it opens a matching short. 
+This is the shield.
+
+The short is not me 
+betting XRP goes down. 
+This is so a crash 
+will not decrease 
+my XRP dollar value,
+while I am still 
+holding XRP.
 
 ---
 
@@ -69,13 +160,16 @@ The short is not me betting XRP goes down. It’s so a crash doesn’t hollow ou
 
 **On screen:** BEAR / BULL boxes
 
-If XRP dumps — I **leave the short on**. I want the USD value of my XRP to survive. I keep quoting.
+If XRP dumps —
+I leave the short on. 
+I want the USD value 
+of my XRP to survive.
 
-If XRP really runs — plus six from where I put the shield — the stop **cuts the short only**. I do **not** sell the XRP on the ledger. I wanted those coins. Now they can run.
-
-Fake-out? Price comes back a bit — shield goes back on. I don’t want to sit naked into another dump.
-
-That’s the whole personal goal: **keep the dollars in a bear, keep the coins in a bull, earn a little spread while I wait.**
+If XRP really pumps, 
+I will close my short position. 
+I do **not** sell all the XRP. 
+I wanted those coins. 
+Now they can go to the moon.
 
 ---
 
@@ -83,13 +177,25 @@ That’s the whole personal goal: **keep the dollars in a bear, keep the coins i
 
 **On screen:** clerk pipe
 
-I don’t ask the AI to “feel” it.
+This is how Aegis works 
+with Condor Routines.
 
-Every ten minutes, four scripts print a verdict. Health, quotes, inventory, shield. The agent does **one** thing. Scripts never place an order.
+Every ten minutes, 
+four scripts print a decision. 
 
-If XRPL isn’t ready or Gate is down, we sit. I won’t quote if I can’t shield a fill.
+1st: 
+Health check for XRPL & Gate. 
+2nd: 
+Quote planner 
+to determine fair value of XRP
+3rd: 
+Inventory of XRP
+4th: 
+Shield for both 
+dump & pump scenarios
 
-That’s the part that finally worked for me on Condor, and didn’t on the old bot.
+After cleared, 
+then orders are placed.
 
 ---
 
@@ -97,25 +203,97 @@ That’s the part that finally worked for me on Condor, and didn’t on the old 
 
 **On screen:** two wallets
 
-Cup money is **eight hundred**. One bankroll.
+This is how Builders Cup money 
+of $800 is allocated.
 
-Five hundred on XRPL — quoting and holding XRP. Two-eighty on XRP-RLUSD, one-forty on XRP-USDC. Clean book: six orders at once, three each side.
+$500 is on XRPL. 
+$280 on XRP-RLUSD, 
+$140 on XRP-USDC. 
 
-Three hundred USDT on Gate — only for the shield. No XRP yet? Short is zero. After a moon cut? Short is zero again.
+$300 is on Gate
+Its used only for the shield 
+or short position. 
 
 ---
+
+## Demo
+
+Here is a short demo of Aegis
+running in Condor.
+
+We have Condor running in my laptop.
+
+In Bots tab,
+Aegis is running 
+with pmm-simple controller
+for both XRP pairs.
+
+In Executors tab,
+We have 1 open position 
+in Gate perpetual
+This is our shield.
+
+We can see this short position 
+in Gate website here.
+
+For XRPL orders,
+We can see those orders
+in xmagnetic website.
+
+And then for the Condor Routines.
+
+Init, is part of health check.
+It allows bot to start 
+if verdict is go.
+
+Venue Health checks for orderbooks,
+here,
+verdict is go. 
+So bot started 
+to place orders.
+
+Next is Quote Planner.
+This calculates order amounts 
+and spreads
+
+Next is Inventory.
+It monitors the XRP balances.
+It signals whether to hold or let go
+
+And finally,
+The shield.
+This is the short position
+in Gate perpetual.
+
+That's how Aegis 
+works in action.
 
 ## Beat 7 — Close (~20s) · §06
 
 **On screen:** the three “how it pays” cards
 
-Spread while I wait. Shield in a dump. Coins if it moons.
+As a summary, Aegis has 3 jobs:
 
-Not easy profits. Promising. That’s AEGIS.
+1. Defend the coins in the bear market
+
+2. Release them in the bull market
+
+3. Collect spread the whole time.
+
+Not easy profits.
+Promising. 
+That’s AEGIS, 
+super powered by Condor & Hummingbot.
 
 Thanks for watching.
 
 ---
+
+
+
+
+
+
 
 ## Timing
 

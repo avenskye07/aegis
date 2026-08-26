@@ -9,16 +9,22 @@ ROUTINES = Path(__file__).resolve().parents[1] / "routines"
 sys.path.insert(0, str(ROUTINES))
 
 from _aegis_math import (  # noqa: E402
+    CLOSE_ORPHAN,
     GO,
+    HEALTHY,
     HOLD,
+    REDEPLOY,
     RELEASE,
     RE_ARM,
     RESIZE,
+    SET_ONEWAY,
     SHIELD_ON,
     STOP,
     VIABLE,
     WIDEN,
     drawdown_quote_scale,
+    cap_quote_budget,
+    heal_verdict,
     hedge_notional,
     implied_xrpl_price,
     issuer_ok,
@@ -193,6 +199,67 @@ def test_pump_pct():
 
 def test_stop_go_constants():
     assert STOP == "STOP" and GO == "GO"
+
+
+def test_heal_prefers_orphan_then_redeploy():
+    assert (
+        heal_verdict(
+            server_ok=True,
+            books_ok=True,
+            leverage_ok=True,
+            oneway_ok=True,
+            bot_running=False,
+            orphan_short_usd=30,
+            stale_quote_count=0,
+        )
+        == CLOSE_ORPHAN
+    )
+    assert (
+        heal_verdict(
+            server_ok=True,
+            books_ok=True,
+            leverage_ok=True,
+            oneway_ok=False,
+            bot_running=False,
+            orphan_short_usd=0,
+            stale_quote_count=0,
+        )
+        == SET_ONEWAY
+    )
+    assert (
+        heal_verdict(
+            server_ok=True,
+            books_ok=True,
+            leverage_ok=True,
+            oneway_ok=True,
+            bot_running=False,
+            orphan_short_usd=0,
+            stale_quote_count=0,
+        )
+        == REDEPLOY
+    )
+    assert (
+        heal_verdict(
+            server_ok=True,
+            books_ok=True,
+            leverage_ok=True,
+            oneway_ok=True,
+            bot_running=True,
+            orphan_short_usd=0,
+            stale_quote_count=0,
+        )
+        == HEALTHY
+    )
+
+
+def test_cap_quote_budget_blocks_oversize_and_thin_books():
+    sized, note = cap_quote_budget(15, quote_free=5, base_free=40, px=1.44)
+    assert sized < 15
+    assert sized <= 5 * 0.80 + 1e-9
+    assert "controller_total_amount_quote" in note
+    zero, hold = cap_quote_budget(15, quote_free=1.0, base_free=1.0, px=1.44)
+    assert zero == 0.0
+    assert "HOLD budget" in hold
 
 
 if __name__ == "__main__":

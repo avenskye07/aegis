@@ -24,6 +24,7 @@ def _aegis_mod(name: str):
 
 
 _math = _aegis_mod("_aegis_math")
+_rep = _aegis_mod("_aegis_report")
 CORE_MIN = _math.CORE_MIN
 HOLD = _math.HOLD
 core_intact = _math.core_intact
@@ -45,15 +46,33 @@ class Config(BaseModel):
     n_pairs: int = Field(default=2)
 
 
+def _xrpl_rows(state) -> list:
+    """Pull the xrpl connector rows from Hummingbot portfolio.get_state()."""
+    if not isinstance(state, dict):
+        return []
+    acct = state.get("master_account")
+    if isinstance(acct, dict) and isinstance(acct.get("xrpl"), list):
+        return acct["xrpl"]
+    if isinstance(state.get("xrpl"), list):
+        return state["xrpl"]
+    for v in state.values():
+        if isinstance(v, dict) and isinstance(v.get("xrpl"), list):
+            return v["xrpl"]
+    return []
+
+
 def _asset_qty(balances, code: str) -> float:
     if not balances:
         return 0.0
     if isinstance(balances, dict):
+        rows = _xrpl_rows(balances)
+        if rows:
+            return _asset_qty(rows, code)
         for k, v in balances.items():
-            if str(k).upper().startswith(code.upper()):
+            if str(k).upper() == code.upper():
                 try:
                     if isinstance(v, dict):
-                        return float(v.get("free") or v.get("total") or 0)
+                        return float(v.get("units") or v.get("free") or v.get("total") or 0)
                     return float(v)
                 except (TypeError, ValueError):
                     continue
@@ -64,9 +83,16 @@ def _asset_qty(balances, code: str) -> float:
             if not isinstance(row, dict):
                 continue
             asset = str(row.get("asset") or row.get("currency") or row.get("token") or "")
-            if asset.upper() == code.upper() or asset.upper().startswith(code.upper()):
+            if asset.upper() == code.upper():
                 try:
-                    return float(row.get("free") or row.get("available") or row.get("total") or 0)
+                    return float(
+                        row.get("units")
+                        or row.get("available_units")
+                        or row.get("free")
+                        or row.get("available")
+                        or row.get("total")
+                        or 0
+                    )
                 except (TypeError, ValueError):
                     return 0.0
     return 0.0
@@ -112,17 +138,27 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
                     xrp_usd = float(raw or 0)
         except Exception as exc:
             logger.warning("ref price: %s", exc)
+        port = {}
         try:
-            port = await client.trading.get_portfolio_state("xrpl") if hasattr(client, "trading") else None
-        except Exception:
-            port = None
-        try:
-            if port is None:
-                ov = await client.portfolio.get_total_value() if hasattr(client, "portfolio") else {}
-                port = ov
+            if hasattr(client, "portfolio") and hasattr(client.portfolio, "get_state"):
+                port = await client.portfolio.get_state()
         except Exception as exc:
-            logger.warning("portfolio: %s", exc)
+            logger.warning("portfolio.get_state: %s", exc)
             port = {}
         xrp_units = _asset_qty(port, "XRP")
     reserved = reserve_xrp(config.levels_per_side, config.n_pairs)
-    return inventory_verdict(xrp_units, xrp_usd or 0.0, config.core_min_usd, reserved)
+    text = inventory_verdict(xrp_units, xrp_usd or 0.0, config.core_min_usd, reserved)
+    rows = _rep.parse_kv_lines(text)
+    await _rep.save_clerk_report(
+        title="AEGIS — Inventory",
+        source="aegis_inventory",
+        text=text,
+        kpis=[
+            ("Net XRP $", _rep.pick(rows, "net_xrp_usd")),
+            ("Tradable", _rep.pick(rows, "tradable_xrp")),
+            ("Core", _rep.pick(rows, "core_intact")),
+        ],
+        section="03 / PILE",
+        description="One XRP pile across both books. Core sleeve is unsellable.",
+    )
+    return text

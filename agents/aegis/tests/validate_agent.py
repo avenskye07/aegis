@@ -24,12 +24,22 @@ for name in sorted(found):
     info = found[name]
     fields = list(info.config_class.model_fields) if getattr(info, "config_class", None) else []
     print(f"  [OK] {name:<22} category={info.category:<12} config_fields={fields}")
-for expected in ("aegis_health", "aegis_quote_planner", "aegis_inventory", "aegis_shield"):
+for expected in (
+    "aegis_health",
+    "aegis_quote_planner",
+    "aegis_inventory",
+    "aegis_shield",
+    "aegis_init",
+    "aegis_heal",
+):
     if expected not in found:
         print(f"  [FAIL] {expected} NOT discovered")
         ok = False
 if "_aegis_math" in found:
     print("  [FAIL] _aegis_math should not be a routine (helper only)")
+    ok = False
+if "_aegis_report" in found:
+    print("  [FAIL] _aegis_report should not be a routine (helper only)")
     ok = False
 
 print("\n=== ROUTINE CONTRACT ===")
@@ -45,7 +55,8 @@ for name, info in sorted(found.items()):
 
 print("\n=== AGENT / STRATEGY LOADING ===")
 from condor.agents.agent import AgentStore
-from condor.agents.strategy import StrategyStore, _slugify
+from condor.agents.strategy import StrategyStore
+from condor.frontmatter import slugify as _slugify
 
 agent = AgentStore().get("aegis")
 if not agent:
