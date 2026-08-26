@@ -10,9 +10,12 @@ agents/aegis/
   routines/
     _aegis_math.py                 # pure math (not a routine)
     aegis_health.py
+    aegis_init.py
+    aegis_heal.py
     aegis_quote_planner.py
     aegis_inventory.py
     aegis_shield.py
+    _aegis_report.py               # dashboard ReportBuilder helper
   tests/
     test_aegis_pure.py
     validate_agent.py

@@ -24,6 +24,7 @@ def _aegis_mod(name: str):
 
 
 _math = _aegis_mod("_aegis_math")
+_rep = _aegis_mod("_aegis_report")
 HEDGE_CAP = _math.HEDGE_CAP
 HOLD = _math.HOLD
 PUMP_CUT = _math.PUMP_CUT
@@ -107,4 +108,18 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     )
     if not config.gate_ok:
         mode = HOLD
-    return format_verdict(mode, config.net_xrp_usd, config.short_usd, target, mark, config.last_entry)
+    text = format_verdict(mode, config.net_xrp_usd, config.short_usd, target, mark, config.last_entry)
+    rows = _rep.parse_kv_lines(text)
+    await _rep.save_clerk_report(
+        title="AEGIS — Shield",
+        source="aegis_shield",
+        text=text,
+        kpis=[
+            ("Mode", _rep.pick(rows, "verdict", "mode")),
+            ("Net $", f"{config.net_xrp_usd:.2f}"),
+            ("Target $", f"{target:.2f}"),
+        ],
+        section="04 / GATE SHIELD",
+        description="1x XRP-USDT short. Dump holds it. Moon cuts it. Pile stays.",
+    )
+    return text

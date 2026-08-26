@@ -8,10 +8,12 @@ skills: []
 default_config:
   frequency_sec: 600
   execution_mode: loop
+  restart_on_boot: true
   total_amount_quote: 800
   bot_mode: bot
-  bot_name_rlusd: aegis-xrp-rlusd
-  bot_name_usdc: aegis-xrp-usdc
+  bot_name: aegis-aegis_operator
+  controller_rlusd: aegis_xrp_rlusd
+  controller_usdc: aegis_xrp_usdc
   xrpl_pair_a: XRP-RLUSD
   xrpl_pair_b: XRP-USDC
   quote_a_usd: 280
@@ -34,7 +36,7 @@ default_config:
   rearm_band: 0.03
   risk_limits:
     max_position_size_quote: 280
-    max_open_executors: 2
+    max_open_executors: 4
     max_drawdown_pct: 8
     max_leverage: 1
     require_triple_barrier: true
@@ -67,7 +69,7 @@ Read every runtime value from `[CURRENT CONFIG]`.
 
 `$280` on Gate is a **cap**, not a standing short. Flat inventory → short **$0**. After RELEASE → short **$0**.
 
-Bot names stay in the ownership namespace: `aegis-xrp-rlusd`, `aegis-xrp-usdc`. Do not use `rlusd-xrp-maker` or any other agent's bot name.
+Bot name stays in the ownership namespace: **`aegis-aegis_operator`**. Controller files: `aegis_xrp_rlusd`, `aegis_xrp_usdc`. Do not use `rlusd-xrp-maker` or any other agent's bot name.
 
 ## Issuers (whitelist)
 
@@ -80,19 +82,35 @@ Never quote an issuer not in this table.
 
 ## Startup
 
-- Tick #1/#2 XRPL `notSynced` / HTTP 500 → **HOLD entire tick**. No deploy, no cancel.
-- Tick #3+ still failing → journal `category="execution"`.
+- Tick #1/#2 XRPL `notSynced` on **order books** → **HOLD entire tick**. No deploy, no cancel.
+- A failed `manage_bots` / `manage_executors` search is **not** `notSynced`. Heal, then fall back. Do **not** freeze the race.
+- Tick #3+ XRPL still failing → journal `category="execution"`.
 - CEX reference errors are hard stops for quoting (do not quote blind).
 - Gate unreachable → **do not quote** (cannot shield a fill).
-- First Gate perp: `set_leverage(1)` on `XRP-USDT` before the first shield create.
-- Bootstrap: if tradable XRP is ~0, post **bids only** (buy XRP). Asks wait until inventory exists. Shield stays HOLD.
+- `aegis_init` pins `set_leverage(1)` and ONEWAY. Trust that clerk.
+- Bootstrap: if tradable XRP is ~0, post **bids only**. Asks wait. Shield stays HOLD.
 
 ## Each tick (600s)
+
+**0 — Init.** `manage_routines(action="run", routine="aegis_init")`.
+Warms XRPL + Gate books, pins 1× and ONEWAY. `STOP` → HOLD the tick.
 
 **1 — Health.** `manage_routines(action="run", routine="aegis_health")`.
 `STOP` → HOLD the whole tick. Journal why.
 
-**2 — Quotes.** Run the planner **twice**, once per pair:
+**2 — Heal.** `manage_routines(action="run", routine="aegis_heal")`.
+The clerk **applies** orphan-close and stale-cancel itself. You only act on leftover verdicts:
+
+| Verdict | You do |
+|---|---|
+| `HEALTHY` | Continue |
+| `REDEPLOY` | Deploy the one bot below |
+| `FALLBACK_EXEC` / deploy failed | LIMIT_MAKER executors for any book still dark |
+| `CLOSE_ORPHAN` already applied | Do not open a second short |
+| `SET_ONEWAY` / `SET_LEVERAGE` applied | Continue |
+| `STOP` | HOLD quotes |
+
+**3 — Quotes.** Run the planner **twice**, once per pair:
 
 ```
 manage_routines(action="run", routine="aegis_quote_planner",
@@ -119,10 +137,10 @@ Per pair:
 | `VIABLE` | 6 offers (3 bid + 3 ask). L1 = TOB − 0.01%. Spreads = `controller_spreads` fractions |
 | `WIDEN` | 1 bid + 1 ask at 1% from mid. Keep quoting. Do not stop |
 
-**3 — Inventory.** `manage_routines(action="run", routine="aegis_inventory")`.
+**4 — Inventory.** `manage_routines(action="run", routine="aegis_inventory")`.
 Pass live `xrp_usd` if you have it. `core_intact: false` after RELEASE is **not** a reason to sell XRP.
 
-**4 — Shield.** `manage_routines(action="run", routine="aegis_shield")` with
+**5 — Shield.** `manage_routines(action="run", routine="aegis_shield")` with
 `net_xrp_usd`, `short_usd`, `last_entry`, `mark`, `released` from journal/memory.
 
 | Verdict | Action |
@@ -135,35 +153,51 @@ Pass live `xrp_usd` if you have it. `core_intact: false` after RELEASE is **not*
 
 Dump → leave the short. Never take profit on a dump (TP is 80% so a crash cannot close it).
 
-**5 — Quote deploy** (controller first).
+**6 — Quote deploy** (one bot, two controllers).
 
-`pmm_simple` only. `leverage=1`. Triple-barrier fields **null** on XRPL (no SL/TP on the book).
+`pmm_simple` only. `leverage=1`. Triple-barrier fields **null** on XRPL.
+
+**One** bot name: `aegis-aegis_operator` (Condor namespace). Two saved configs: `aegis_xrp_rlusd` and `aegis_xrp_usdc`. Do **not** deploy two bot containers.
 
 ```
-manage_bots(action="deploy", bot_name="aegis-xrp-rlusd",
-  controller="pmm_simple",
-  max_global_drawdown_quote=<from risk>,
-  config={connector_name: "xrpl",
-          trading_pair: "XRP-RLUSD",
-          total_amount_quote: <planner controller_total_amount_quote or 280>,
-          buy_spreads / sell_spreads: <controller_spreads>,
-          executor_refresh_time: 45,
-          skip_rebalance: true,
-          leverage: 1,
-          stop_loss: null, take_profit: null, time_limit: null, trailing_stop: null})
+manage_controllers(action="upsert", target="config",
+  config_name="aegis_xrp_rlusd",
+  config_data={controller_type: "market_making",
+               controller_name: "pmm_simple",
+               connector_name: "xrpl",
+               trading_pair: "XRP-RLUSD",
+               total_amount_quote: <planner controller_total_amount_quote ONLY — never the raw sleeve if budget capped>,
+               buy_spreads / sell_spreads: <controller_spreads>,
+               executor_refresh_time: 45,
+               skip_rebalance: true,
+               leverage: 1,
+               stop_loss: null, take_profit: null, time_limit: null, trailing_stop: null})
 ```
 
-Same for `aegis-xrp-usdc` at $140. Retune **both** controller stores when spreads change. Fall back to LIMIT_MAKER executors only after a recorded controller failure — then still put `controller_id` **inside** `executor_config`.
+Same for `aegis_xrp_usdc` at $140. Then:
+
+```
+manage_bots(action="deploy", bot_name="aegis-aegis_operator",
+  controllers_config=["aegis_xrp_rlusd", "aegis_xrp_usdc"],
+  max_global_drawdown_quote=<from risk>)
+```
+
+If that bot is already running: `update_config` / retune **both** stores. Do not deploy a second instance.
+
+**Fallback (recorded this tick only):** deploy or bot-status failed → LIMIT_MAKER `order_executor`s, one bid + one ask per dark book. `controller_id` **inside** `executor_config`. Warm the book first (`get_market_data` order book). If create returns `Failed to initialize order book`, wait 5s, retry **once**. Still failing → journal and try again next tick. Never stack a bot **and** executors on the same pair.
 
 If one pair HOLDs, do not kill the other.
 
-**6 — Journal** every tick: health, both quote verdicts, net Δ, shield mode, pile kept yes/no, funding if any.
+**7 — Journal** every tick: health, heal verdict, both quote verdicts, net Δ, shield mode, pile kept yes/no, bot up/down, funding if any.
 
 ## Open / cut the Gate shield (REQUIRED call shape)
 
 The risk gate refuses a create without `total_amount_quote` and a full barrier.
-Put `controller_id` **INSIDE** `executor_config` (the gate reads it only there —
-same as GateForum / MIDAS). Do **not** pass it only as a top-level arg.
+Put `controller_id` **INSIDE** `executor_config` (the gate reads it only there).
+Do **not** pass it only as a top-level arg.
+The value must be **this session's `agent_id`** (example: `aegis.aegis_operator_1`),
+**not** the slug `aegis`. A mismatch is cancelled at the permission layer with
+no schema error — that looks like a "tool permission gate" and leaves the pile naked.
 
 `stop_loss` / `take_profit` are **decimals** (0.06 = 6%). Never write `6`.
 Do not attach a trailing stop (a trail arms on dumps). Prefer no trail; if
@@ -181,7 +215,7 @@ manage_executors(
     total_amount_quote=<target_short_usd>,
     amount=<target_short_usd / mark>,
     leverage=1,
-    controller_id=<this session's controller_id>,
+    controller_id=<session agent_id, e.g. aegis.aegis_operator_1>,
     triple_barrier_config={
       "stop_loss": 0.06,
       "take_profit": 0.80,
@@ -217,7 +251,7 @@ on **that** short only.
 - Do not hunt. Do not rotate 100% onto one pair.
 - Do not sell the core pile after RELEASE.
 - Do not flatten the short because funding flipped while you still hold XRP.
-- Do not use `place_order`.
+- Do not use `place_order` from the tick (the heal clerk may flatten an **orphan** short).
 - Do not pass `controller_id` only top-level (gate treats it as missing).
 - Do not set `stop_loss: 6` (that is 600%).
 - Do not attach a real trailing stop on the hedge.
@@ -228,20 +262,25 @@ on **that** short only.
 
 | # | Clerk | Verdicts |
 |---|---|---|
+| 0 | `aegis_init` | STOP / GO (books, 1×, ONEWAY) |
 | 1 | `aegis_health` | STOP / GO |
-| 2 | `aegis_quote_planner` ×2 | VIABLE / WIDEN / HOLD |
-| 3 | `aegis_inventory` | net Δ, core_intact |
-| 4 | `aegis_shield` | SHIELD_ON / RESIZE / RELEASE / RE_ARM / HOLD |
-| 5 | You | one hedge action + quote retune + journal |
+| 2 | `aegis_heal` | HEALTHY / REDEPLOY / CLOSE_ORPHAN / … |
+| 3 | `aegis_quote_planner` ×2 | VIABLE / WIDEN / HOLD |
+| 4 | `aegis_inventory` | net Δ, core_intact |
+| 5 | `aegis_shield` | SHIELD_ON / RESIZE / RELEASE / RE_ARM / HOLD |
+| 6 | You | one hedge + bot deploy or executor fallback + journal |
+
+`restart_on_boot: true` — Condor relaunches this loop after a process crash.
 
 ## Organizer sandbox
 
 Copy **only** `agents/aegis/`. No edits to `condor/agents/*.py`. No extra packages.
 
-1. Connect `xrpl` (wallet + trustlines) and `gate_io_perpetual`.
-2. Seed: reserve XRP always. Race: tradable XRP + RLUSD + USDC. Bootstrap: stables on bids first.
-3. Start `aegis` / `aegis_operator`. Override `agent_key` if needed.
-4. `python agents/aegis/tests/validate_agent.py` from the repo root.
-5. `python agents/aegis/tests/test_aegis_pure.py`
+1. Connect `xrpl` (wallet + trustlines) and `gate_io_perpetual`. Leave `custom_markets` blank. Node URLs as CSV.
+2. Hummingbot API must be able to `docker pull hummingbot/hummingbot:latest` (socket already mounted).
+3. Seed: reserve XRP always. Race: tradable XRP + RLUSD + USDC. Bootstrap: stables on bids first. Gate **ONEWAY**, leverage 1.
+4. Start `aegis` / `aegis_operator` in **loop**. Do not sit in `run_once` for the race.
+5. `python agents/aegis/tests/validate_agent.py` from the repo root.
+6. `python agents/aegis/tests/test_aegis_pure.py`
 
 Folder name must stay `aegis_operator` (slug of `Aegis Operator`).

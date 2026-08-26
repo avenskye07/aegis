@@ -10,3 +10,5 @@ Not a hummingbot/condor fork. Drop `agents/aegis/` into a Condor checkout.
 ```
 
 Deck: `aegis-deck.html` · Script: `aegis-script.md`
+
+Insurance only on this private repo. Do not push to hummingbot/condor from the live box.
