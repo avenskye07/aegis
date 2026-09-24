@@ -30,10 +30,16 @@ agents/aegis/
 ./.venv/bin/python agents/aegis/tests/validate_agent.py
 ```
 
-## Executor bug (do not "fix" in the engine)
+## Executor contract (do not "fix" in the engine)
 
-Standalone creates are blocked if `controller_id` is only a top-level
-`manage_executors` arg (`prompts.py` vs `risk.py`). AEGIS follows GateForum /
-MIDAS: put `controller_id` **inside** `executor_config`, and always send
-`action="create"` + `total_amount_quote` + a full `triple_barrier_config`.
-`stop_loss` is `0.06` (6%), never `6`. No trailing stop on the hedge.
+Standalone creates are blocked unless `controller_id` is passed as an argument
+(`prompts.py` vs `risk.py`). Pass **this session's `agent_id`**
+(`aegis.aegis_operator_1`), not the slug `aegis`.
+
+The retired `manage_executors` mega-tool is gone: one tool per operation now,
+so a missing argument is a validation error instead of silently routing to a
+different branch. `create_position_executor` takes **flat keyword arguments** —
+there is no `executor_config` dict and no `action="create"`, and
+`total_amount_quote` does not exist for position executors (`amount` is in
+**base** currency). Barriers are flat too: `stop_loss` / `take_profit` are
+decimals (`0.06` = 6%), never `6`. No trailing stop on the hedge.

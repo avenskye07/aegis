@@ -118,15 +118,16 @@ for s in strats:
     if "Small-wallet" in fm or fm.count("---") > 0:
         print("  [FAIL] strategy frontmatter may be truncated (--- inside YAML)")
         ok = False
-    if "controller_id" in md.lower() and "inside" not in md.lower():
-        print("  [FAIL] strategy must say controller_id INSIDE executor_config")
+    if "controller_id" not in md.lower():
+        print("  [FAIL] strategy must document the controller_id argument")
         ok = False
     else:
-        print("  [OK] strategy documents controller_id inside executor_config")
-    if "action=\"create\"" not in md and "action=\"create\"" not in md.replace("'", '"'):
-        if 'action="create"' not in md:
-            print("  [FAIL] strategy must require action=create")
-            ok = False
+        print("  [OK] strategy documents the controller_id argument")
+    if "manage_executors" in md:
+        print("  [FAIL] strategy still calls the retired manage_executors tool")
+        ok = False
+    else:
+        print("  [OK] strategy uses the current per-operation executor tools")
     if "stop_loss\": 0.06" not in md and "stop_loss: 0.06" not in md:
         print("  [FAIL] pump cut must be 0.06 not 6")
         ok = False

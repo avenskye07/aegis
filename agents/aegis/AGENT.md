@@ -7,7 +7,9 @@ agent_key: claude-acp:sonnet
 tools:
 - get_market_data
 - get_portfolio_overview
-- manage_executors
+- create_position_executor
+- list_executors
+- stop_executor
 - manage_controllers
 - manage_bots
 - manage_routines
@@ -86,7 +88,7 @@ a human. A bot-API 500 is a heal + fallback, not a freeze.
 - **Caps are platform-enforced.** Follow the strategy call shape exactly.
 - **1x on Gate.** Never add leverage.
 
-Thresholds, dollars, and the exact `manage_executors` / `manage_bots` payloads
+Thresholds, dollars, and the exact `create_position_executor` / `manage_bots` payloads
 are in the strategy file. Do not invent numbers.
 
 ## Why you win

@@ -83,7 +83,7 @@ Never quote an issuer not in this table.
 ## Startup
 
 - Tick #1/#2 XRPL `notSynced` on **order books** → **HOLD entire tick**. No deploy, no cancel.
-- A failed `manage_bots` / `manage_executors` search is **not** `notSynced`. Heal, then fall back. Do **not** freeze the race.
+- A failed `manage_bots` / `list_executors` search is **not** `notSynced`. Heal, then fall back. Do **not** freeze the race.
 - Tick #3+ XRPL still failing → journal `category="execution"`.
 - CEX reference errors are hard stops for quoting (do not quote blind).
 - Gate unreachable → **do not quote** (cannot shield a fill).
@@ -205,35 +205,29 @@ the platform demands one, `activation_price: 0.45` and `trailing_delta: 0.02`
 so a normal dump cannot arm it.
 
 ```
-manage_executors(
-  action="create",
-  executor_type="position_executor",
-  executor_config={
-    connector_name="gate_io_perpetual",
-    trading_pair="XRP-USDT",
-    side=2,
-    total_amount_quote=<target_short_usd>,
-    amount=<target_short_usd / mark>,
-    leverage=1,
-    controller_id=<session agent_id, e.g. aegis.aegis_operator_1>,
-    triple_barrier_config={
-      "stop_loss": 0.06,
-      "take_profit": 0.80,
-      "time_limit": 172800,
-      "open_order_type": 1
-    }
-  }
+create_position_executor(
+  connector_name="gate_io_perpetual",
+  trading_pair="XRP-USDT",
+  side=2,
+  amount=<target_short_usd / mark>,
+  leverage=1,
+  controller_id=<session agent_id, e.g. aegis.aegis_operator_1>,
+  stop_loss=0.06,
+  take_profit=0.80,
+  time_limit=172800,
+  open_order_type=1
 )
 ```
 
-`side=2` is the short. `amount` is base XRP. `action="create"` is required —
-omit it and you only get the schema.
+`side=2` is the short. `amount` is **base XRP**, not USD — size it as
+`target_short_usd / mark`. Arguments are flat: there is no `executor_config`
+dict, no `action="create"`, and no `total_amount_quote` for position executors.
 
 **Do not** `stop` a filled hedge to "refresh". Search executors first. A
 RUNNING row with `filled_amount_quote > 0` is the shield. Only cancel unfilled
 quotes.
 
-RELEASE / flatten: `manage_executors(action="stop", ..., keep_position=False)`
+RELEASE / flatten: `stop_executor(executor_id=<id>, keep_position=False)`
 on **that** short only.
 
 ## Drawdown (scale, don't kill)
