@@ -69,11 +69,13 @@ aegis_shield         → SHIELD_ON | RESIZE | RELEASE | RE_ARM | HOLD
 YOU                  → quote / hedge / journal
 ```
 
-Routines never invent RELEASE. XRPL quotes go through **one** `pmm_simple` bot
-(`aegis-aegis_operator`, two controllers). If that deploy is dead this tick,
-LIMIT_MAKER executors keep the books. The Gate shield is a `position_executor`
-so the platform can enforce the pump stop. You never `place_order`. The heal
-clerk may flatten an **orphan** short if the executor died.
+Routines never invent RELEASE. XRPL quotes go through **one** `aegis_ward_mm` bot
+(`aegis-aegis_operator`, two controllers). The ward maker requotes every 5 min,
+or early when mid walks > 0.5 % from the book's anchor (checked every 60 s, in
+code — no LLM). If that deploy is dead this tick, LIMIT_MAKER executors keep
+the books. The Gate shield is a `position_executor` so the platform can enforce
+the pump stop. You never `place_order`. The heal clerk may flatten an **orphan**
+short if the executor died.
 
 `restart_on_boot: true` plus a 15-minute watchdog keep the loop alive without
 a human. A bot-API 500 is a heal + fallback, not a freeze.

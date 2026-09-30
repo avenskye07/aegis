@@ -104,16 +104,16 @@ for s in strats:
     if rl.get("max_leverage", 1) != 1:
         print("  [FAIL] max_leverage must be 1")
         ok = False
-    if rl.get("max_position_size_quote", 0) > 280:
-        print("  [FAIL] hedge cap must be ≤ $280")
+    if rl.get("max_position_size_quote", 0) > 200:
+        print("  [FAIL] hedge cap must be ≤ $200")
         ok = False
     if "---" in Path(s.path).read_text()[4:].split("---", 1)[0] if False else "":
         pass
     exp = _slugify(s.name)
-    d = (REPO / "agents/aegis/strategies" / exp).is_dir()
+    d = (REPO / "agents/aegis/loops" / exp).is_dir()
     ok &= d
     print(f"  [{'OK' if d else 'FAIL'}] folder '{exp}' matches slugified name")
-    md = (REPO / "agents/aegis/strategies" / exp / "strategy.md").read_text()
+    md = (REPO / "agents/aegis/loops" / exp / "loop.md").read_text()
     fm = md.split("---", 2)[1]
     if "Small-wallet" in fm or fm.count("---") > 0:
         print("  [FAIL] strategy frontmatter may be truncated (--- inside YAML)")
@@ -123,16 +123,42 @@ for s in strats:
         ok = False
     else:
         print("  [OK] strategy documents the controller_id argument")
+    if "aegis_ward_mm" not in md:
+        print("  [FAIL] loop must deploy aegis_ward_mm")
+        ok = False
+    else:
+        print("  [OK] loop deploys aegis_ward_mm")
+    if "buy_amounts_pct" not in md:
+        print("  [FAIL] loop must set buy_amounts_pct (null crashes the controller)")
+        ok = False
+    else:
+        print("  [OK] loop sets buy_amounts_pct")
     if "manage_executors" in md:
         print("  [FAIL] strategy still calls the retired manage_executors tool")
         ok = False
     else:
         print("  [OK] strategy uses the current per-operation executor tools")
-    if "stop_loss\": 0.06" not in md and "stop_loss: 0.06" not in md:
+    if "stop_loss=0.06" not in md and "stop_loss: 0.06" not in md and "stop_loss\": 0.06" not in md:
         print("  [FAIL] pump cut must be 0.06 not 6")
         ok = False
     else:
         print("  [OK] stop_loss is decimal 0.06")
+
+print("\n=== WARD CONTROLLER ===")
+ward = REPO / "agents/aegis/controllers/aegis_ward_mm.py"
+if not ward.is_file():
+    print("  [FAIL] controllers/aegis_ward_mm.py missing")
+    ok = False
+else:
+    src = ward.read_text()
+    if "class AegisWardMM" not in src or "executors_to_early_stop" not in src:
+        print("  [FAIL] aegis_ward_mm missing class or early-stop hook")
+        ok = False
+    else:
+        print("  [OK] aegis_ward_mm present")
+    if "delta_raptor" in src.lower() or "DeltaRaptor" in src:
+        print("  [FAIL] ward controller must not reference other entries")
+        ok = False
 
 print("\n=== ISOLATION ===")
 imports = []

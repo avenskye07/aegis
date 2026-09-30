@@ -14,28 +14,31 @@ default_config:
   bot_name: aegis-aegis_operator
   controller_rlusd: aegis_xrp_rlusd
   controller_usdc: aegis_xrp_usdc
+  controller_name: aegis_ward_mm
   xrpl_pair_a: XRP-RLUSD
   xrpl_pair_b: XRP-USDC
-  quote_a_usd: 280
-  quote_b_usd: 140
+  quote_a_usd: 360
+  quote_b_usd: 180
   levels_per_side: 3
-  executor_refresh_time: 45
+  executor_refresh_time: 300
+  anchor_poll_sec: 60
+  anchor_band_bps: 50
   skip_rebalance: true
   adverse_k: 1.0
   widen_distance_pct: 1.0
   top_of_book_improve_pct: 0.01
   rlusd_issuer: rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De
   usdc_issuer: rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE
-  reference_connector: binance_perpetual
+  reference_connector: gate_io_perpetual
   reference_pair: XRP-USDT
   hedge_connector: gate_io_perpetual
   hedge_pair: XRP-USDT
-  hedge_cap: 280
-  core_min_usd: 80
+  hedge_cap: 200
+  core_min_usd: 60
   pump_cut: 0.06
   rearm_band: 0.03
   risk_limits:
-    max_position_size_quote: 280
+    max_position_size_quote: 200
     max_open_executors: 4
     max_drawdown_pct: 8
     max_leverage: 1
@@ -60,14 +63,15 @@ Read every runtime value from `[CURRENT CONFIG]`.
 
 | Sleeve | $ | Duty |
 |---|---|---|
-| XRPL wallet | **500** | Quotes + XRP pile + reserves |
-| XRP-RLUSD quotes | **280** | 3×2 offers, ~$47 / level when tight |
-| XRP-USDC quotes | **140** | 3×2 offers, ~$23 / level when tight |
-| Reserves / shock | **~80** | 1 + 0.2×offers XRP — not tradable |
-| Gate USDT | **300** | 1x short margin. Used = min(net XRP Δ, **280**) |
-| Core pile | **80–120** of the XRP leg | Unsellable. Inside inventory, not extra cash |
+| XRPL wallet | **580** | Quotes + XRP pile + reserves |
+| XRP-RLUSD quotes | **360** | 3×2 offers, ~$60 / level when tight |
+| XRP-USDC quotes | **180** | 3×2 offers, ~$30 / level when tight |
+| Reserves / shock | **~40** | 1 + 0.2×offers XRP — not tradable |
+| Gate USDT | **220** | 1x short margin. Used = min(net XRP Δ, **200**) |
+| Core pile | **60–100** of the XRP leg | Unsellable. Inside inventory, not extra cash |
 
-`$280` on Gate is a **cap**, not a standing short. Flat inventory → short **$0**. After RELEASE → short **$0**.
+`$200` on Gate is a **cap**, not a standing short. Flat inventory → short **$0**. After RELEASE → short **$0**.
+More of the $800 sits on the XRPL books (volume), less sits idle as hedge margin.
 
 Bot name stays in the ownership namespace: **`aegis-aegis_operator`**. Controller files: `aegis_xrp_rlusd`, `aegis_xrp_usdc`. Do not use `rlusd-xrp-maker` or any other agent's bot name.
 
@@ -115,19 +119,16 @@ The clerk **applies** orphan-close and stale-cancel itself. You only act on left
 ```
 manage_routines(action="run", routine="aegis_quote_planner",
   config={"xrpl_pair": "XRP-RLUSD",
-          "requote_interval_sec": 45,
-          "levels_per_side": 3,
-          "total_amount_quote": 280,
           "quote_issuer": "<RLUSD issuer>"})
 manage_routines(action="run", routine="aegis_quote_planner",
   config={"xrpl_pair": "XRP-USDC",
-          "requote_interval_sec": 45,
-          "levels_per_side": 3,
-          "total_amount_quote": 140,
           "quote_issuer": "<USDC issuer>"})
 ```
 
-Use `requote_interval_sec` = `executor_refresh_time` (45), **not** `frequency_sec`. Wrong interval inflates the floor.
+Sizes, refresh interval and reference connector come from this file's
+`default_config` (via `_aegis_desk`). Pass only the pair and issuer here.
+The planner's `requote_interval_sec` must match `executor_refresh_time` (300) —
+wrong interval inflates the floor.
 
 Per pair:
 
@@ -153,28 +154,39 @@ Pass live `xrp_usd` if you have it. `core_intact: false` after RELEASE is **not*
 
 Dump → leave the short. Never take profit on a dump (TP is 80% so a crash cannot close it).
 
-**6 — Quote deploy** (one bot, two controllers).
+**6 — Quote deploy** (one bot, two ward-maker controllers).
 
-`pmm_simple` only. `leverage=1`. Triple-barrier fields **null** on XRPL.
+`aegis_ward_mm` only — ships in `agents/aegis/controllers/`; copy it into the
+Hummingbot API `bots/controllers/market_making/` before the first deploy (or
+let `aegis_init` push it). `leverage=1`. Triple-barrier fields **null** on XRPL.
 
-**One** bot name: `aegis-aegis_operator` (Condor namespace). Two saved configs: `aegis_xrp_rlusd` and `aegis_xrp_usdc`. Do **not** deploy two bot containers.
+**One** bot name: `aegis-aegis_operator` (Condor namespace). Two saved configs:
+`aegis_xrp_rlusd` and `aegis_xrp_usdc`. Do **not** deploy two bot containers.
+
+Requote cadence is code, not you: every **300 s** on the timer, and early when
+the mid walks **> 50 bps** from the book's anchor (checked every 60 s). Do not
+retune the controller just to chase price.
 
 ```
 manage_controllers(action="upsert", target="config",
   config_name="aegis_xrp_rlusd",
   config_data={controller_type: "market_making",
-               controller_name: "pmm_simple",
+               controller_name: "aegis_ward_mm",
                connector_name: "xrpl",
                trading_pair: "XRP-RLUSD",
                total_amount_quote: <planner controller_total_amount_quote ONLY — never the raw sleeve if budget capped>,
                buy_spreads / sell_spreads: <controller_spreads>,
-               executor_refresh_time: 45,
+               buy_amounts_pct: [100],   # REQUIRED — null crashes sum()
+               sell_amounts_pct: [100],  # one entry per spread level
+               executor_refresh_time: 300,
+               anchor_poll_sec: 60,
+               anchor_band_bps: 50,
                skip_rebalance: true,
                leverage: 1,
                stop_loss: null, take_profit: null, time_limit: null, trailing_stop: null})
 ```
 
-Same for `aegis_xrp_usdc` at $140. Then:
+Same for `aegis_xrp_usdc` at the USDC sleeve. Then:
 
 ```
 manage_bots(action="deploy", bot_name="aegis-aegis_operator",
@@ -234,7 +246,7 @@ on **that** short only.
 
 | Account DD | Quotes | Hedge |
 |---|---|---|
-| 0–4% | full $420 | full Δ ≤ $280 |
+| 0–4% | full $540 | full Δ ≤ $200 |
 | 4–8% | half, widen | keep hedge |
 | >8% | widen, no new size | keep hedge if still long XRP |
 

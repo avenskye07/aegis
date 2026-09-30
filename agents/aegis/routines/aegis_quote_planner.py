@@ -18,6 +18,7 @@ import importlib.util
 from pathlib import Path as _P
 
 
+
 def _aegis_mod(name: str):
     path = _P(__file__).with_name(name + ".py")
     spec = importlib.util.spec_from_file_location("aegis_" + name, path)
@@ -30,6 +31,9 @@ def _aegis_mod(name: str):
 
 _math = _aegis_mod("_aegis_math")
 _rep = _aegis_mod("_aegis_report")
+_desk = _aegis_mod("_aegis_desk")
+setting = _desk.setting
+sleeve_for = _desk.sleeve_for
 HOLD = _math.HOLD
 VIABLE = _math.VIABLE
 WIDEN = _math.WIDEN
@@ -89,12 +93,22 @@ class Config(BaseModel):
     """Plan maker quotes for one XRPL pair against a CEX XRP-USD reference."""
 
     xrpl_pair: str = Field(default="XRP-RLUSD")
-    reference_connector: str = Field(default="binance_perpetual")
-    reference_pair: str = Field(default="XRP-USDT")
-    tick_interval_sec: int = Field(default=600)
-    requote_interval_sec: int = Field(default=45)
-    levels_per_side: int = Field(default=3)
-    total_amount_quote: float = Field(default=280.0)
+    reference_connector: str = Field(
+        default_factory=lambda: str(setting("reference_connector", "gate_io_perpetual"))
+    )
+    reference_pair: str = Field(
+        default_factory=lambda: str(setting("reference_pair", "XRP-USDT"))
+    )
+    tick_interval_sec: int = Field(
+        default_factory=lambda: int(setting("frequency_sec", 600))
+    )
+    requote_interval_sec: int = Field(
+        default_factory=lambda: int(setting("executor_refresh_time", 300))
+    )
+    levels_per_side: int = Field(
+        default_factory=lambda: int(setting("levels_per_side", 3))
+    )
+    total_amount_quote: float = Field(default=0.0)  # 0 → sleeve_for(pair) in run()
     adverse_k: float = Field(default=1.0)
     amm_fee_pct_fallback: float = Field(default=0.20)
     base_issuer: str = Field(default="", description="Issuer if base is not XRP")
@@ -257,7 +271,7 @@ def plan_from_inputs(
             return "\n".join(out)
         out.append(f"controller_total_amount_quote: {sized:.2f}")
         if sized + 1e-9 < total_amount_quote:
-            out.append("note: never deploy a pmm_simple total above this cap")
+            out.append("note: never deploy a ward-maker total above this cap")
 
     if mode == VIABLE:
         ladder = ladder_bps(floor, ceiling, levels)
@@ -300,6 +314,12 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     if not client:
         return await _out("verdict: HOLD\nreason: no hummingbot server", config.xrpl_pair)
 
+    sleeve = float(config.total_amount_quote or 0) or sleeve_for(config.xrpl_pair)
+    if sleeve <= 0:
+        return await _out(
+            f"verdict: HOLD\nreason: no sleeve for {config.xrpl_pair} in loop.md",
+            config.xrpl_pair,
+        )
     try:
         candles_raw, ref_prices = await asyncio.gather(
             client.market_data.get_candles(
@@ -390,7 +410,7 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
         adverse_k=config.adverse_k,
         amm_fee_pct=amm_pct,
         levels=config.levels_per_side,
-        total_amount_quote=config.total_amount_quote,
+        total_amount_quote=sleeve,
         best_bid=best_bid,
         best_ask=best_ask,
         improve_pct=config.top_of_book_improve_pct,

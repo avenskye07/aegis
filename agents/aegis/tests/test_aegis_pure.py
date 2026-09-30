@@ -69,10 +69,10 @@ def test_tob_improves_both_sides():
 
 
 def test_sizing_and_reserves():
-    assert abs(per_level_quote(280, 3) - 280 / 6) < 1e-9
+    assert abs(per_level_quote(360, 3) - 360 / 6) < 1e-9
     assert reserve_xrp(3, 2) == 1.0 + 0.2 * 12
     assert hedge_notional(150) == 150
-    assert hedge_notional(400) == 280
+    assert hedge_notional(400) == 200
     assert hedge_notional(0) == 0
 
 
@@ -168,7 +168,7 @@ def test_resize_band():
         shield_verdict(
             gate_ok=True,
             book_ok=True,
-            net_xrp_usd_val=280,
+            net_xrp_usd_val=200,
             short_usd=50,
             last_entry=1.00,
             mark=1.00,
@@ -260,6 +260,46 @@ def test_cap_quote_budget_blocks_oversize_and_thin_books():
     zero, hold = cap_quote_budget(15, quote_free=1.0, base_free=1.0, px=1.44)
     assert zero == 0.0
     assert "HOLD budget" in hold
+
+
+
+def test_desk_reads_loop_sleeves():
+    from _aegis_desk import desk, setting, sleeve_for
+
+    cfg = desk()
+    assert cfg.get("controller_name") == "aegis_ward_mm"
+    assert float(setting("quote_a_usd")) == 360.0
+    assert float(setting("quote_b_usd")) == 180.0
+    assert float(setting("hedge_cap")) == 200.0
+    assert setting("reference_connector") == "gate_io_perpetual"
+    assert sleeve_for("XRP-RLUSD") == 360.0
+    assert sleeve_for("XRP-USDC") == 180.0
+    assert sleeve_for("NOPE-PAIR") == 0.0
+
+
+def test_anchor_walk_bps():
+    from decimal import Decimal
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "controllers" / "aegis_ward_mm.py"
+    spec = importlib.util.spec_from_file_location("aegis_ward_mm_test", path)
+    mod = importlib.util.module_from_spec(spec)
+    # hummingbot is not on the pure-test path — load only the pure helper via exec of the function body
+    src = path.read_text(encoding="utf-8")
+    # extract anchor_walk_bps by compiling a minimal stub module
+    ns = {"Decimal": Decimal, "Optional": __import__("typing").Optional}
+    exec(
+        "from typing import Optional\n"
+        "BPS_PER_UNIT = Decimal(10_000)\n"
+        + src[src.index("def anchor_walk_bps") : src.index("class AegisWardMMConfig")],
+        ns,
+    )
+    fn = ns["anchor_walk_bps"]
+    assert fn(None, Decimal("1")) == 0
+    assert fn(Decimal("1"), Decimal("1")) == 0
+    assert abs(fn(Decimal("1.00"), Decimal("1.005")) - Decimal("50")) < Decimal("0.01")
+    assert abs(fn(Decimal("1.00"), Decimal("0.995")) - Decimal("50")) < Decimal("0.01")
 
 
 if __name__ == "__main__":

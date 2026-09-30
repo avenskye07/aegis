@@ -13,6 +13,7 @@ import importlib.util
 from pathlib import Path as _P
 
 
+
 def _aegis_mod(name: str):
     path = _P(__file__).with_name(name + ".py")
     spec = importlib.util.spec_from_file_location("aegis_" + name, path)
@@ -25,6 +26,8 @@ def _aegis_mod(name: str):
 
 _math = _aegis_mod("_aegis_math")
 _rep = _aegis_mod("_aegis_report")
+_desk = _aegis_mod("_aegis_desk")
+setting = _desk.setting
 CORE_MIN = _math.CORE_MIN
 HOLD = _math.HOLD
 core_intact = _math.core_intact
@@ -39,10 +42,18 @@ class Config(BaseModel):
     """Read XRPL XRP inventory and whether the core sleeve is intact."""
 
     xrp_usd: float = Field(default=0.0, description="If 0, try CEX XRP-USDT")
-    reference_connector: str = Field(default="binance_perpetual")
-    reference_pair: str = Field(default="XRP-USDT")
-    core_min_usd: float = Field(default=CORE_MIN)
-    levels_per_side: int = Field(default=3)
+    reference_connector: str = Field(
+        default_factory=lambda: str(setting("reference_connector", "gate_io_perpetual"))
+    )
+    reference_pair: str = Field(
+        default_factory=lambda: str(setting("reference_pair", "XRP-USDT"))
+    )
+    core_min_usd: float = Field(
+        default_factory=lambda: float(setting("core_min_usd", CORE_MIN))
+    )
+    levels_per_side: int = Field(
+        default_factory=lambda: int(setting("levels_per_side", 3))
+    )
     n_pairs: int = Field(default=2)
 
 

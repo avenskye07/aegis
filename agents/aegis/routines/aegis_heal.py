@@ -265,7 +265,7 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     lines.append(f"verdict: {verdict}")
     lines.append(f"applied: {', '.join(applied) if applied else 'none'}")
     if verdict == REDEPLOY:
-        lines.append("action: deploy bot aegis-aegis_operator with both pmm_simple configs")
+        lines.append("action: deploy bot aegis-aegis_operator with both aegis_ward_mm configs")
         lines.append("if deploy fails this tick: FALLBACK_EXEC (LIMIT_MAKER both books)")
     text = "\n".join(lines)
     rows = _rep.parse_kv_lines(text)

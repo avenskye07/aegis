@@ -30,9 +30,9 @@ OWNER_RESERVE_XRP = 0.2
 PUMP_CUT = 0.06
 REARM_BAND = 0.03
 RESIZE_BAND = 0.08
-HEDGE_CAP = 280.0
-CORE_MIN = 80.0
-CORE_MAX = 120.0
+HEDGE_CAP = 200.0
+CORE_MIN = 60.0
+CORE_MAX = 100.0
 
 
 def split_pair(xrpl_pair: str) -> tuple[str, str]:
@@ -231,7 +231,7 @@ def cap_quote_budget(
     haircut: float = BUDGET_HAIRCUT,
     min_quote: float = MIN_PAIR_QUOTE,
 ) -> tuple[float, str]:
-    """Fit pmm_simple total_amount_quote to live inventory.
+    """Fit the ward-maker total_amount_quote to live inventory.
 
     One number feeds both bids and asks. Oversizing the thin side is what
     floods Hummingbot with INSUFFICIENT_BALANCE. Never return a budget the

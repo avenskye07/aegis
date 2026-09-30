@@ -13,6 +13,7 @@ import importlib.util
 from pathlib import Path as _P
 
 
+
 def _aegis_mod(name: str):
     path = _P(__file__).with_name(name + ".py")
     spec = importlib.util.spec_from_file_location("aegis_" + name, path)
@@ -25,6 +26,8 @@ def _aegis_mod(name: str):
 
 _math = _aegis_mod("_aegis_math")
 _rep = _aegis_mod("_aegis_report")
+_desk = _aegis_mod("_aegis_desk")
+setting = _desk.setting
 HEDGE_CAP = _math.HEDGE_CAP
 HOLD = _math.HOLD
 PUMP_CUT = _math.PUMP_CUT
@@ -47,9 +50,15 @@ class Config(BaseModel):
     released: bool = Field(default=False)
     gate_ok: bool = Field(default=True)
     book_ok: bool = Field(default=True)
-    hedge_cap: float = Field(default=HEDGE_CAP)
-    hedge_connector: str = Field(default="gate_io_perpetual")
-    hedge_pair: str = Field(default="XRP-USDT")
+    hedge_cap: float = Field(
+        default_factory=lambda: float(setting("hedge_cap", HEDGE_CAP))
+    )
+    hedge_connector: str = Field(
+        default_factory=lambda: str(setting("hedge_connector", "gate_io_perpetual"))
+    )
+    hedge_pair: str = Field(
+        default_factory=lambda: str(setting("hedge_pair", "XRP-USDT"))
+    )
 
 
 def format_verdict(
@@ -59,6 +68,7 @@ def format_verdict(
     target: float,
     mark: float,
     last_entry: float,
+    hedge_cap: float,
 ) -> str:
     move = pump_pct(mark, last_entry) if mark and last_entry else None
     lines = [
@@ -67,7 +77,7 @@ def format_verdict(
         f"net_xrp_usd: {net_xrp_usd:.2f}",
         f"short_usd: {short_usd:.2f}",
         f"target_short_usd: {target:.2f}",
-        f"hedge_cap: {HEDGE_CAP:.0f}",
+        f"hedge_cap: {hedge_cap:.0f}",
         f"mark: {mark:.6f}",
         f"last_entry: {last_entry:.6f}",
         f"pump_pct: {move if move is not None else 'n/a'}",
@@ -76,7 +86,7 @@ def format_verdict(
         "barrier: SL 0.06 / TP 0.80 / 48h / no trail / leverage 1",
         "RELEASE → cut short ONLY. Do not sell XRPL XRP.",
         "DUMP → leave the short on.",
-        "cap: min(net_xrp_usd, 280) — not a standing $280",
+        f"cap: min(net_xrp_usd, {hedge_cap:.0f}) — not a standing ${hedge_cap:.0f}",
     ]
     return "\n".join(lines)
 
@@ -108,7 +118,9 @@ async def run(config: Config, context: ContextTypes.DEFAULT_TYPE) -> str:
     )
     if not config.gate_ok:
         mode = HOLD
-    text = format_verdict(mode, config.net_xrp_usd, config.short_usd, target, mark, config.last_entry)
+    text = format_verdict(
+        mode, config.net_xrp_usd, config.short_usd, target, mark, config.last_entry, config.hedge_cap
+    )
     rows = _rep.parse_kv_lines(text)
     await _rep.save_clerk_report(
         title="AEGIS — Shield",
